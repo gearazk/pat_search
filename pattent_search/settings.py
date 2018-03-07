@@ -74,7 +74,8 @@ WSGI_APPLICATION = 'pattent_search.wsgi.application'
 # https://docs.djangoproject.com/en/1.11/ref/settings/#databases
 DATABASES = {
     'default': {
-        'ENGINE': '',
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME'  : 'mydatabase',
     },
 }
 

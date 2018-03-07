@@ -59,12 +59,14 @@ def upload_file(request):
     print(len(file))
 
     skiped_file = []
-    for f in file:
+    for idx,f in enumerate(file):
+        print('%d/%d completed'% (idx+1,len(file)))
+
         filename = f.name.split('/')[-1]
 
         if Patent.objects.filter(filename=filename).first():
-            messages.error(request,'File name is duplicated (already in the system) %s' % filename)
             skiped_file.append(filename)
+            print('Skip file duplicate')
 
         doc = json.loads(json.dumps(xmltodict.parse(f.read())))
         f.close()
@@ -93,6 +95,7 @@ def upload_file(request):
                 ['section']
         except Exception as e :
             skiped_file.append(filename)
+            print('Skip')
             print(e)
             continue
 
@@ -109,7 +112,10 @@ def upload_file(request):
 
     messages.success(request,'Complete upload %d files' % (len(file)-len(skiped_file)))
     if len(skiped_file) > 0:
-        messages.error(request, 'File format error ! skip %d files: %s' % (len(skiped_file),' , '.join(skiped_file)))
+        if len(skiped_file) > 10:
+            messages.error(request, 'File format error or duplicate ! skip %d files : [...]' % len(skiped_file) )
+        else:
+            messages.error(request, 'File format error or duplicate ! skip %d files: %s' % (len(skiped_file),' , '.join(skiped_file)))
 
     return redirect('/')
 
