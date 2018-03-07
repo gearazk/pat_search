@@ -1,16 +1,21 @@
 import json
 
+from django.contrib import messages
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.shortcuts import render, redirect
 import xmltodict
 
 from pattent_search.models import Patent
 from pattent_search.utils import get_values_recursive
+from django.contrib.messages import get_messages
 
 import time
 
 def index(request):
-    return render(request,template_name='index.html')
+    context = {
+        'messages': get_messages(request)
+    }
+    return render(request,context=context,template_name='index.html')
 
 def show(request,pat_id):
     context = {
@@ -45,41 +50,51 @@ def listing(request):
 
 
 def upload_file(request):
+
     file = request.FILES.getlist('upload_file')
 
     if not file or len(file) == 0:
         return redirect('/')
     print('len(file)')
     print(len(file))
+
+    skiped_file = []
     for f in file:
         filename = f.name.split('/')[-1]
 
         if Patent.objects.filter(filename=filename).first():
-            # TODO: ERROR duplicate file
-
-            return redirect('/')
+            messages.error(request,'File name is duplicated (already in the system) %s' % filename)
+            skiped_file.append(filename)
 
         doc = json.loads(json.dumps(xmltodict.parse(f.read())))
         f.close()
+        try:
+            title   = doc   ['patent-application-publication'] \
+                ['subdoc-bibliographic-information'] \
+                ['technical-information'] \
+                ['title-of-invention']
 
-        title   = doc   ['patent-application-publication'] \
-            ['subdoc-bibliographic-information'] \
-            ['technical-information'] \
-            ['title-of-invention']
+            abstract =  doc ['patent-application-publication'] \
+                ['subdoc-abstract'] \
+                ['paragraph']
+            if isinstance(abstract,list):
+                abstract = get_values_recursive(abstract)
+            else:
+                abstract = abstract['#text']
 
-        abstract =  doc ['patent-application-publication'] \
-            ['subdoc-abstract'] \
-            ['paragraph']['#text']
+            summary = doc   ['patent-application-publication'] \
+                ['subdoc-description'] \
+                ['summary-of-invention'] \
+                ['section']
 
-        summary = doc   ['patent-application-publication'] \
-            ['subdoc-description'] \
-            ['summary-of-invention'] \
-            ['section']
-
-        detail  = doc   ['patent-application-publication'] \
-            ['subdoc-description'] \
-            ['detailed-description'] \
-            ['section']
+            detail  = doc   ['patent-application-publication'] \
+                ['subdoc-description'] \
+                ['detailed-description'] \
+                ['section']
+        except Exception as e :
+            skiped_file.append(filename)
+            print(e)
+            continue
 
         detail_txt = get_values_recursive(detail)
         summary_txt = get_values_recursive(summary)
@@ -91,6 +106,10 @@ def upload_file(request):
             content     = summary_txt+'\n'+detail_txt,
         )
         pat.save()
+
+    messages.success(request,'Complete upload %d files' % (len(file)-len(skiped_file)))
+    if len(skiped_file) > 0:
+        messages.error(request, 'File format error ! skip %d files: %s' % (len(skiped_file),' , '.join(skiped_file)))
 
     return redirect('/')
 
